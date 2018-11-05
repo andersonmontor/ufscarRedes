@@ -118,6 +118,15 @@ def raw_recv(fd):
     if dst_port != 7000:
         return
 
+    calc_check, = struct.unpack("!H", fix_checksum(segment, src_addr, dst_addr)[16:18])
+
+
+    #Droppa o pacote se o checksum não bater, está comentado devido a mal funcionamento quando executado localmente
+
+    # if (checksum != calc_check):
+    #     return
+    
+
     print ("Src addr: ", src_addr)
     print ("Dst addr: ", dst_addr)
     print ("Src port: ", src_port)
@@ -127,8 +136,6 @@ def raw_recv(fd):
     print ("Flags: ", flags)
     print ("Window size: ", window_size)
     print ("Urgent pointer: ", urg_ptr)
-    print()
-    calc_check = struct.unpack("!H", fix_checksum(segment, src_addr, dst_addr)[16:18])
     print ("Checksum: ", checksum)
     print("Calculated checksum: ",  calc_check)
     print()
