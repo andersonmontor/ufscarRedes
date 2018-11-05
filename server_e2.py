@@ -27,7 +27,9 @@ class Conexao:
         self.id_conexao = id_conexao
         self.seq_no = seq_no
         self.ack_no = ack_no
-        self.send_queue = b"HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n" + 1000000 * b"hello pombo\n"
+        self.send_queue = b"HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\n\r\n"
+        for i in range(1000):
+            self.send_queue += b"ABCDEFGHIJKLMNO(%d)\n" % i
 conexoes = {}
 
 
@@ -66,6 +68,7 @@ def calc_checksum(segment):
             checksum = (checksum & 0xffff) + 1
     checksum = ~checksum
     return checksum & 0xffff
+
 
 def fix_checksum(segment, src_addr, dst_addr):
     pseudohdr = str2addr(src_addr) + str2addr(dst_addr) + \
@@ -114,6 +117,21 @@ def raw_recv(fd):
 
     if dst_port != 7000:
         return
+
+    print ("Src addr: ", src_addr)
+    print ("Dst addr: ", dst_addr)
+    print ("Src port: ", src_port)
+    print ("Dst port: ", dst_port)
+    print ("Sequence number: ", seq_no)
+    print ("Ack number: ", ack_no)
+    print ("Flags: ", flags)
+    print ("Window size: ", window_size)
+    print ("Urgent pointer: ", urg_ptr)
+    print()
+    calc_check = struct.unpack("!H", fix_checksum(segment, src_addr, dst_addr)[16:18])
+    print ("Checksum: ", checksum)
+    print("Calculated checksum: ",  calc_check)
+    print()
 
     payload = segment[4*(flags>>12):]
 
