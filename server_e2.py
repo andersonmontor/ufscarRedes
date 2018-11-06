@@ -37,9 +37,11 @@ class Conexao:
         self.SRTTstime = None
         self.estimatedRTT = 0
         self.devRTT = 0
-        self.timeoutInterval = 1000 #1 segundo
+        self.timeoutInterval = 1 
+        self.segments = {}
         self.nonACKs = {}
         self.timerRunning = False
+        self.duplicatedACKs = {}
 
 
 conexoes = {}
@@ -121,30 +123,36 @@ def send_next(fd, conexao):
                           conexao.ack_no, (5<<12)|FLAGS_ACK,
                           1024, 0, 0) + payload
 
+    seg_seqno = conexao.seq_no
     conexao.seq_no = (conexao.seq_no + len(payload)) & 0xffffffff
 
 
     segment = fix_checksum(segment, src_addr, dst_addr)
 
-    if not TESTAR_PERDA_ENVIO or random.random() < 0.95:
+    #Envio com chance artificial de perda
+    if not TESTAR_PERDA_ENVIO or random.random() < 0.80:
         fd.sendto(segment, (dst_addr, dst_port))
-        if VERBOSE >= 1:
-            print("Sending: %d" % conexao.seq_no)
 
-        #Anota o tempo para calculo do RTT no recebimento do ACK
-        if not conexao.SRTTstime:
-            conexao.SRTTstime = time.time()
-            conexao.SRTTackno = conexao.seq_no
+    #Risco de estourar RAM, precisa de mecanismo de limpeza de segmentos antigos
+    conexao.segments[seg_seqno] = (segment, dst_addr, dst_port)
 
-        #Coloca na lista de nao-ackeds e roda o timer
-        conexao.nonACKs[conexao.seq_no] = (segment, dst_addr, dst_port)
+    if VERBOSE >= 1:
+        print("Sending: %d" % conexao.seq_no)
 
-        #Calculo do timeout
-        conexao.timeoutInterval = conexao.estimatedRTT + (4 * conexao.devRTT)
+    #Anota o tempo para calculo do RTT no recebimento do ACK
+    if not conexao.SRTTstime:
+        conexao.SRTTstime = time.time()
+        conexao.SRTTackno = conexao.seq_no
 
-        if not conexao.timerRunning:
-            asyncio.get_event_loop().call_later(conexao.timeoutInterval, resend, fd, conexao)
-            conexao.timerRunning = True
+    #Coloca na lista de nao-ackeds e roda o timer
+    conexao.nonACKs[conexao.seq_no] = (segment, dst_addr, dst_port)
+
+    #Calculo do timeout
+    conexao.timeoutInterval = conexao.estimatedRTT + (4 * conexao.devRTT)
+
+    if not conexao.timerRunning:
+        asyncio.get_event_loop().call_later(conexao.timeoutInterval, resend, fd, conexao)
+        conexao.timerRunning = True
 
 
     if conexao.send_queue == b"":
@@ -213,8 +221,7 @@ def raw_recv(fd):
         conexao.ack_no += len(payload)
 
         if (flags & FLAGS_ACK) == FLAGS_ACK:
-            if VERBOSE >= 1:
-                print ("ACK received:", ack_no)
+
 
             #Calculo do RTT baseado no tempo anotado do pacote correspondente a este ACK
             if conexao.SRTTackno and (ack_no == (conexao.SRTTackno)):
@@ -249,6 +256,24 @@ def raw_recv(fd):
                 conexao.timerRunning = True
             else:
                 conexao.timerRunning = False
+
+                #Tratamento para ACKs duplicados
+                if ack_no in conexao.duplicatedACKs.keys():
+                    conexao.duplicatedACKs[ack_no] += 1
+                else:
+                    conexao.duplicatedACKs[ack_no] = 1
+
+                if conexao.duplicatedACKs[ack_no] >= 3:
+                    if ack_no in conexao.segments.keys():
+                        #Fast retransmit
+                        Asegment, Adst_addr, Adst_port = conexao.segments[ack_no]
+                        fd.sendto(Asegment, (Adst_addr, Adst_port))
+
+                        if VERBOSE >= 1:
+                            print("Fast retransmiting:", ack_no)
+
+            if VERBOSE >= 1:
+                print ("ACK received: %d (%d non-ackeds)" % (ack_no, len(conexao.nonACKs.keys())))
 
 
 
