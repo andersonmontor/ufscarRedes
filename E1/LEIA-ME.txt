@@ -1,0 +1,23 @@
+Etapa 1 do projeto de redes
+
+Grupo:
+Anderson Alan Montor 726495
+Henrique Cordeiro Frajacomo 726536
+Gustavo Henrique Carvalho Nakagawa 726534
+
+
+Instruções:
+
+Foram feitos 2 programas: genfile.py e server.py
+
+- genfile.py serve pra criar um arquivo de tamanho grande para ser transferido pelo servidor, só rodar com python2 que vai ser gerado um arquivo "arquivogrande"
+- server.py é o servidor, só rodar com python2 que ele criará um socket que ficará na escuta de localhost:5001, caso a porta esteja indisponível, é possível alterar no código.
+- Pode-se usar o programa netcat para conectar ao servidor, por exemplo: "nc localhost 5001"
+
+O protocolo para se comunicar com o server consiste do seguinte formato: "comando [argumentos]"
+Os comandos disponíveis são:
+
+SAYYOURNAME                           #Responde o nome da maquina host
+ECHO texto                            #Repete texto
+PASSAOARQUIVOAIMANO filename          #Envia o conteudo do arquivo de nome filename 
+CLOSE                                 #Fecha conexão
