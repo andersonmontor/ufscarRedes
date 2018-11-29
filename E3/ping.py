@@ -20,10 +20,16 @@ class Datagram: #Representa o pacote completo formado pelos fragmentos
 
     holes = []
 
-    def __init__(self, src_addr, dest_addr):
+    def __init__(self, src_addr, dest_addr, buracos):
         self.src_addr = src_addr
         self.dest_addr = dest_addr
+        holes = buracos
 
+    def set_hole(self, Hole):
+    	holes = Hole
+
+    def get_hole(self):
+    	return self.holes
     
 
 def send_ping(send_fd):
@@ -46,8 +52,26 @@ def raw_recv(recv_fd):
     flags = flagsfragment >> 13
     frag_offset = flagsfragment << 3 #gambiarra pra zerar as flags, mas ok ahsuhaus
     frag_offset = frag_offset >> 3 
+    frag_last = frag_offset + total_length # Final do pacote
+
+    # Reaasembly do Datagram
+    global Data
+    for i in range(0,len(Data.holes)):
+    	if(frag_offset > Data.holes[i].last):
+    		continue
+    	elif(frag_last > Data.holes[i].first):
+    		continue
+    	else:
+    		Removed = Data.holes.pop(i)
+    		if(frag_offset > Removed.first):
+    			new_hole = Hole(Removed.first, frag_offset - 1)
+    			Data.holes.append(new_hole)
+    		elif(frag_last < Removed.last):
+    			new_hole = Hole(frag_last + 1, Removed.last)
+    			Data.holes.append(new_hole)    				
 
     print(identification, flags, frag_offset)
+    return Data
 
 def calc_checksum(segment):
     if len(segment) % 2 == 1:
@@ -81,6 +105,9 @@ if __name__ == '__main__':
     # ou seja, se incluírem cabeçalhos da camada de enlace.
     # Ver http://man7.org/linux/man-pages/man7/packet.7.html
     recv_fd = socket.socket(socket.AF_PACKET, socket.SOCK_DGRAM, socket.htons(ETH_P_IP))
+
+    Holes = Hole(0, 12000)
+    Data = Datagram('0x0800','216.58.202.110', Holes)
 
     loop = asyncio.get_event_loop()
     loop.add_reader(recv_fd, raw_recv, recv_fd)
